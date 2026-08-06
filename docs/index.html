@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Weekly GO Vote frequency in homepage OCR, split by recorded search engine.">
+    <title>GO Vote weekly data</title>
+    <script
+      src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"
+      integrity="sha384-b0GXujLkk9eYYSmcSfoyZbfyElGAQnDyY0skCHSG6w3JgTMFnz11ggrTAr7seu9f"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17211d;
+        --muted: #65716b;
+        --paper: #f5f2e9;
+        --card: #fffdf7;
+        --line: #d8d4c8;
+        --accent: #086b50;
+        --accent-dark: #064d3b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: radial-gradient(circle at top right, #dceee6 0, transparent 32rem), var(--paper);
+        font: 16px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { width: min(1120px, calc(100% - 2rem)); margin: 0 auto; padding: 4rem 0; }
+      header { max-width: 760px; margin-bottom: 2rem; }
+      .eyebrow { color: var(--accent); font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+      h1 { margin: .25rem 0 .75rem; font: clamp(2.5rem, 7vw, 5.5rem)/.95 Georgia, serif; letter-spacing: -.045em; }
+      h2 { margin-top: 0; font: 1.7rem/1.15 Georgia, serif; }
+      p { margin: .5rem 0; }
+      .lede { color: #35423c; font-size: 1.15rem; }
+      .panel, .download {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--card) 94%, transparent);
+        box-shadow: 0 18px 50px rgb(20 48 38 / 7%);
+      }
+      .panel { padding: clamp(1rem, 3vw, 2rem); }
+      .controls { display: flex; gap: 1rem; align-items: end; justify-content: space-between; flex-wrap: wrap; }
+      label { display: grid; gap: .35rem; color: var(--muted); font-size: .85rem; font-weight: 700; }
+      select {
+        min-width: min(28rem, 80vw);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: white;
+        color: var(--ink);
+        padding: .7rem .9rem;
+        font: inherit;
+      }
+      #status { color: var(--muted); font-size: .9rem; }
+      .chart-wrap { position: relative; min-height: 420px; margin-top: 1.5rem; }
+      .downloads { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }
+      .download { display: block; padding: 1.15rem; color: inherit; text-decoration: none; transition: transform .15s, border-color .15s; }
+      .download:hover { transform: translateY(-2px); border-color: var(--accent); }
+      .download strong { display: block; color: var(--accent-dark); font-size: 1.08rem; }
+      .download span { color: var(--muted); font-size: .88rem; }
+      .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 2rem; margin-top: 2rem; }
+      code { font-size: .85em; }
+      @media (max-width: 640px) { main { padding-top: 2.25rem; } .chart-wrap { min-height: 340px; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">Tech Watch Project</div>
+        <h1>GO Vote, week by week</h1>
+        <p class="lede">Homepage OCR frequency from April 1, 2026 through the latest nightly snapshot, shown by recorded engine.</p>
+      </header>
+
+      <section class="panel" aria-labelledby="chart-title">
+        <div class="controls">
+          <div>
+            <h2 id="chart-title">Weekly frequency</h2>
+            <p id="status">Loading nightly aggregate data…</p>
+          </div>
+          <label>
+            Metric
+            <select id="metric">
+              <option value="canonical_govote_positive">Canonical classifier — positive captures</option>
+              <option value="exact_go_vote_phrase_positive">Exact “go vote” phrase — positive captures</option>
+              <option value="canonical_govote_per_100_homepages">Canonical classifier — per 100 homepages</option>
+              <option value="exact_go_vote_phrase_per_100_homepages">Exact “go vote” phrase — per 100 homepages</option>
+            </select>
+          </label>
+        </div>
+        <div class="chart-wrap"><canvas id="weekly-chart"></canvas></div>
+      </section>
+
+      <h2 style="margin-top: 2.5rem">Download CSVs</h2>
+      <div class="downloads">
+        <a class="download" href="data/go-vote-google-weekly.csv" download><strong>Google</strong><span>One row per UTC week</span></a>
+        <a class="download" href="data/go-vote-bing-weekly.csv" download><strong>Bing</strong><span>One row per UTC week</span></a>
+        <a class="download" href="data/go-vote-yahoo-weekly.csv" download><strong>Yahoo</strong><span>Both recorded Yahoo host aliases</span></a>
+        <a class="download" href="data/go-vote-all-engines-weekly.csv" download><strong>All engines</strong><span>Reconciled sum of all three engines</span></a>
+      </div>
+
+      <section class="notes" aria-label="Method notes">
+        <div>
+          <h2>What is measured</h2>
+          <p>The canonical series uses the existing vote/election/poll classifier. The exact series requires the words “go vote” in sequence, case-insensitively, with flexible whitespace.</p>
+        </div>
+        <div>
+          <h2>How to read coverage</h2>
+          <p>Each CSV includes homepage captures, completed OCR, coverage percentage, raw positives, rates, partial-week flags, the snapshot cutoff, and classifier version.</p>
+        </div>
+        <div>
+          <h2>Privacy and reproducibility</h2>
+          <p>The nightly job uses a database account restricted to reads and exports aggregate counts only. It never publishes OCR text or individual capture identifiers.</p>
+        </div>
+      </section>
+    </main>
+    <script>
+      const files = {
+        Google: "data/go-vote-google-weekly.csv",
+        Bing: "data/go-vote-bing-weekly.csv",
+        Yahoo: "data/go-vote-yahoo-weekly.csv",
+        "All engines": "data/go-vote-all-engines-weekly.csv"
+      };
+      const colors = { Google: "#4285f4", Bing: "#008373", Yahoo: "#7b4bb7", "All engines": "#17211d" };
+      const metricSelect = document.querySelector("#metric");
+      const status = document.querySelector("#status");
+      let chart;
+      let series;
+
+      function parseCsv(text) {
+        const records = [];
+        let row = [], field = "", quoted = false;
+        for (let i = 0; i < text.length; i += 1) {
+          const char = text[i];
+          if (quoted && char === '"' && text[i + 1] === '"') { field += '"'; i += 1; }
+          else if (char === '"') quoted = !quoted;
+          else if (char === "," && !quoted) { row.push(field); field = ""; }
+          else if ((char === "\n" || char === "\r") && !quoted) {
+            if (char === "\r" && text[i + 1] === "\n") i += 1;
+            row.push(field); field = "";
+            if (row.some(value => value !== "")) records.push(row);
+            row = [];
+          } else field += char;
+        }
+        if (field || row.length) { row.push(field); records.push(row); }
+        const [headers, ...values] = records;
+        return values.map(items => Object.fromEntries(headers.map((header, index) => [header, items[index]])));
+      }
+
+      function draw() {
+        const metric = metricSelect.value;
+        const labels = series["All engines"].map(row => row.week_start_utc.slice(0, 10));
+        const datasets = Object.entries(series).map(([name, rows]) => ({
+          label: name,
+          data: rows.map(row => Number(row[metric])),
+          borderColor: colors[name],
+          backgroundColor: colors[name],
+          borderWidth: name === "All engines" ? 3 : 2,
+          pointRadius: 2,
+          tension: 0.2
+        }));
+        chart?.destroy();
+        chart = new Chart(document.querySelector("#weekly-chart"), {
+          type: "line",
+          data: { labels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: "index" },
+            plugins: { legend: { position: "bottom" } },
+            scales: {
+              x: { title: { display: true, text: "Week starting (UTC)" } },
+              y: { beginAtZero: true, title: { display: true, text: metric.includes("per_100") ? "Positive captures per 100 homepages" : "Positive captures" } }
+            }
+          }
+        });
+      }
+
+      Promise.all(Object.entries(files).map(async ([name, path]) => {
+        const response = await fetch(path, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${name}: HTTP ${response.status}`);
+        return [name, parseCsv(await response.text())];
+      })).then(entries => {
+        series = Object.fromEntries(entries);
+        const latest = series["All engines"].at(-1);
+        status.textContent = `Snapshot cutoff: ${latest.snapshot_cutoff_utc} · partial weeks are marked in each CSV`;
+        draw();
+        metricSelect.addEventListener("change", draw);
+      }).catch(error => {
+        status.textContent = `Nightly data is not available yet (${error.message}).`;
+        status.style.color = "#9f2d20";
+      });
+    </script>
+  </body>
+</html>
