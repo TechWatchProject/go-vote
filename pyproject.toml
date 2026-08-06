@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "go-vote"
+version = "1.0.0"
+description = "Read-only weekly GO Vote data exporter and static chart site"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PyMySQL[rsa]>=1.1.0",
+    "SQLAlchemy>=2.0.36",
+]
+
+[project.optional-dependencies]
+dev = [
+    "hatchling==1.27.0",
+    "mypy>=1.18.2",
+    "pytest>=8.4.2",
+    "ruff>=0.14.0",
+]
+
+[project.scripts]
+go-vote-export = "go_vote.export:main"
+go-vote-validate = "go_vote.export:validation_main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/go_vote"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = true
