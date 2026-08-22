@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Shell|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel)}\" && { [ -f ci/hooks/tool_guard.py ] && uv run ci/hooks/tool_guard.py || exit 0; }",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
