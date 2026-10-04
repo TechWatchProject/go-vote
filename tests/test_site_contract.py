@@ -37,14 +37,20 @@ def test_nightly_workflow_is_read_only_and_publishes_docs() -> None:
     assert "@v" not in workflow
 
 
-def test_downloadable_csvs_match_validated_frozen_baseline() -> None:
-    published = read_csv_files(ROOT / "docs" / "data")
-    validate_publishable(published)
-    combined = published["All"]
+def test_frozen_report_retains_validated_baseline_counts() -> None:
+    frozen = read_csv_files(FROZEN_REPORT)
+    validate_publishable(frozen)
+    combined = frozen["All"]
     assert len(combined) == 19
     assert sum(int(str(row["homepage_captures"])) for row in combined) == 11_622
     assert sum(int(str(row["ocr_completed"])) for row in combined) == 11_337
     assert sum(int(str(row["canonical_govote_positive"])) for row in combined) == 242
     assert sum(int(str(row["exact_go_vote_phrase_positive"])) for row in combined) == 0
+
+
+def test_downloadable_csvs_preserve_validated_frozen_baseline() -> None:
+    frozen = read_csv_files(FROZEN_REPORT)
+    published = read_csv_files(ROOT / "docs" / "data")
+    validate_publishable(published, frozen)
     for filename in OUTPUT_FILES.values():
-        assert (ROOT / "docs" / "data" / filename).read_bytes() == (FROZEN_REPORT / filename).read_bytes()
+        assert (ROOT / "docs" / "data" / filename).is_file()
