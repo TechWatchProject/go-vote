@@ -258,7 +258,7 @@ def _verify_readonly_connection(
         raise ValueError("database account has an unexpected grant or scope")
 
 
-def read_observations(
+def read_observations(  # noqa: C901 -- measured baseline, TechWatchProject/go-vote#3
     start: datetime,
     snapshot_cutoff: datetime,
     *,
@@ -438,7 +438,7 @@ def read_csv_files(directory: Path) -> dict[str, list[dict[str, object]]]:
     return rows_by_engine
 
 
-def validate_publishable(
+def validate_publishable(  # noqa: C901 -- measured baseline, TechWatchProject/go-vote#3
     candidate: Mapping[str, Sequence[Mapping[str, object]]],
     baseline: Mapping[str, Sequence[Mapping[str, object]]] | None = None,
 ) -> None:
