@@ -327,3 +327,22 @@ def test_publish_gate_rejects_bad_rates_bounds_and_metadata() -> None:
     bad_temporal["Bing"][0]["week_end_utc"] = "2026-04-05T00:00:00Z"
     with pytest.raises(ValueError, match="temporal metadata is not aligned"):
         validate_publishable(bad_temporal)
+
+
+def test_html_reminder_is_reported_without_ocr_and_duplicates_collapse() -> None:
+    row = {
+        "searches_id": 900,
+        "captured_at": datetime(2026, 11, 3, 12),
+        "raw_engine": "www.google.com",
+        "ocr_row_id": None,
+        "canonical_positive": 0,
+        "exact_positive": 0,
+        "html_analyzed": 1,
+        "html_govote_positive": 1,
+    }
+    observations = collapse_partition_rows([row, row])
+    rows = build_weekly_rows(observations, datetime(2026, 4, 1, tzinfo=UTC), datetime(2026, 11, 4, tzinfo=UTC))
+    current = rows["All"][-1]
+    assert current["ocr_completed"] == 0
+    assert current["html_analyzed"] == 1
+    assert current["html_govote_positive"] == 1

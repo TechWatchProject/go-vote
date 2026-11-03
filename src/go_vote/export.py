@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, Engine, make_url
 
-CSV_COLUMNS = (
+CSV_COLUMNS: tuple[str, ...] = (
     "week_start_utc",
     "week_end_utc",
     "recorded_engine",
@@ -39,7 +39,16 @@ CSV_COLUMNS = (
     "snapshot_cutoff_utc",
     "classifier_version",
 )
-CLASSIFIER_VERSION = "canonical-vote-election-poll-v1+exact-go-vote-v1"
+LEGACY_CSV_COLUMNS = CSV_COLUMNS
+HTML_COLUMNS = (
+    "html_analyzed",
+    "html_govote_positive",
+    "html_coverage_pct",
+    "html_govote_per_100_homepages",
+)
+CSV_COLUMNS += HTML_COLUMNS
+LEGACY_CLASSIFIER_VERSION = "canonical-vote-election-poll-v1+exact-go-vote-v1"
+CLASSIFIER_VERSION = LEGACY_CLASSIFIER_VERSION + "+html-vote-election-poll-v1"
 EXACT_GO_VOTE_PATTERN = r"(^|[^[:alnum:]_])go[[:space:]]+vote([^[:alnum:]_]|$)"
 PAGE_SIZE = 2_000
 READONLY_USERNAME = "sentiment_readonly"
@@ -73,7 +82,9 @@ PARTITION_SQL = text(
         CASE
             WHEN LOWER(COALESCE(hot.ocr_text, '')) REGEXP :exact_pattern THEN 1
             ELSE 0
-        END AS exact_positive
+        END AS exact_positive,
+        CASE WHEN hr.vote IS NOT NULL THEN 1 ELSE 0 END AS html_analyzed,
+        CASE WHEN hr.vote=1 THEN 1 ELSE 0 END AS html_govote_positive
     FROM searches AS s
     INNER JOIN (
         SELECT id
@@ -82,13 +93,14 @@ PARTITION_SQL = text(
           AND datetime >= :partition_start
           AND datetime < :partition_end
           AND is_homepage = 1
-          AND screenshot IS NOT NULL
-          AND TRIM(screenshot) <> ''
+          AND ((screenshot IS NOT NULL AND TRIM(screenshot) <> '')
+            OR (html IS NOT NULL AND TRIM(html) <> ''))
           AND id > :after_id
         ORDER BY id
         LIMIT :page_size
     ) AS page ON page.id = s.id
     LEFT JOIN homepage_ocr_text AS hot ON hot.searches_id = s.id
+    LEFT JOIN google_govote_html AS hr ON hr.search_id=s.id
     ORDER BY s.id, hot.id
     """
 )
@@ -102,6 +114,8 @@ class CaptureObservation:
     ocr_completed: bool
     canonical_positive: bool
     exact_positive: bool
+    html_analyzed: bool = False
+    html_govote_positive: bool = False
 
 
 @dataclass
@@ -112,6 +126,8 @@ class _MutableObservation:
     ocr_completed: bool = False
     canonical_positive: bool = False
     exact_positive: bool = False
+    html_analyzed: bool = False
+    html_govote_positive: bool = False
 
 
 @dataclass
@@ -120,12 +136,16 @@ class _Counts:
     ocr_completed: int = 0
     canonical_positive: int = 0
     exact_positive: int = 0
+    html_analyzed: int = 0
+    html_govote_positive: int = 0
 
     def add(self, observation: CaptureObservation) -> None:
         self.homepage_captures += 1
         self.ocr_completed += int(observation.ocr_completed)
         self.canonical_positive += int(observation.canonical_positive)
         self.exact_positive += int(observation.exact_positive)
+        self.html_analyzed += int(observation.html_analyzed)
+        self.html_govote_positive += int(observation.html_govote_positive)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -164,6 +184,9 @@ def collapse_partition_rows(rows: Iterable[Mapping[Any, Any]]) -> list[CaptureOb
         existing.canonical_positive = existing.canonical_positive or bool(row.get("canonical_positive"))
         existing.exact_positive = existing.exact_positive or bool(row.get("exact_positive"))
 
+        existing.html_analyzed = existing.html_analyzed or bool(row.get("html_analyzed"))
+        existing.html_govote_positive = existing.html_govote_positive or bool(row.get("html_govote_positive"))
+
     observations = [
         CaptureObservation(
             value.searches_id,
@@ -172,10 +195,14 @@ def collapse_partition_rows(rows: Iterable[Mapping[Any, Any]]) -> list[CaptureOb
             value.ocr_completed,
             value.canonical_positive,
             value.exact_positive,
+            value.html_analyzed,
+            value.html_govote_positive,
         )
         for value in captures.values()
     ]
     for observation in observations:
+        if observation.html_govote_positive and not observation.html_analyzed:
+            raise ValueError("positive HTML result without completed HTML classification")
         if (observation.canonical_positive or observation.exact_positive) and not observation.ocr_completed:
             raise ValueError(f"positive classifier result without OCR for searches.id={observation.searches_id}")
     return sorted(observations, key=lambda item: item.searches_id)
@@ -394,6 +421,10 @@ def build_weekly_rows(
                     "exact_go_vote_phrase_positive": values.exact_positive,
                     "exact_go_vote_phrase_per_100_homepages": _rate(values.exact_positive, values.homepage_captures),
                     "exact_go_vote_phrase_per_100_ocred": _rate(values.exact_positive, values.ocr_completed),
+                    "html_analyzed": values.html_analyzed,
+                    "html_govote_positive": values.html_govote_positive,
+                    "html_coverage_pct": _rate(values.html_analyzed, values.homepage_captures),
+                    "html_govote_per_100_homepages": _rate(values.html_govote_positive, values.homepage_captures),
                     "snapshot_cutoff_utc": cutoff_text,
                     "classifier_version": classifier_version,
                 }
@@ -410,6 +441,8 @@ def validate_reconciliation(rows_by_engine: Mapping[str, Sequence[Mapping[str, o
         "ocr_completed",
         "canonical_govote_positive",
         "exact_go_vote_phrase_positive",
+        "html_analyzed",
+        "html_govote_positive",
     )
     lengths = {len(rows_by_engine[engine]) for engine in (*individual, "All")}
     if len(lengths) != 1:
@@ -428,9 +461,12 @@ def read_csv_files(directory: Path) -> dict[str, list[dict[str, object]]]:
         path = directory / filename
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)
-            if tuple(reader.fieldnames or ()) != CSV_COLUMNS:
+            if tuple(reader.fieldnames or ()) not in (CSV_COLUMNS, LEGACY_CSV_COLUMNS):
                 raise ValueError(f"unexpected CSV schema in {path}")
             rows = [dict(row) for row in reader]
+            for row in rows:
+                for column in HTML_COLUMNS:
+                    row.setdefault(column, "0.000000" if "pct" in column or "per_100" in column else "0")
         if any(row["recorded_engine"] != engine for row in rows):
             raise ValueError(f"unexpected recorded engine in {path}")
         rows_by_engine[engine] = rows
@@ -481,7 +517,13 @@ def validate_publishable(  # noqa: C901 -- measured baseline, TechWatchProject/g
             exact = int(str(row["exact_go_vote_phrase_positive"]))
             if not (0 <= ocr <= homepage and 0 <= canonical <= ocr and 0 <= exact <= ocr):
                 raise ValueError(f"invalid count bounds for {engine} at week index {index}")
+            html_done = int(str(row["html_analyzed"]))
+            html_positive = int(str(row["html_govote_positive"]))
+            if not 0 <= html_positive <= html_done <= homepage:
+                raise ValueError("invalid HTML count bounds")
             expected_rates = {
+                "html_coverage_pct": _rate(html_done, homepage),
+                "html_govote_per_100_homepages": _rate(html_positive, homepage),
                 "ocr_coverage_pct": _rate(ocr, homepage),
                 "canonical_govote_per_100_homepages": _rate(canonical, homepage),
                 "canonical_govote_per_100_ocred": _rate(canonical, ocr),
@@ -499,7 +541,7 @@ def validate_publishable(  # noqa: C901 -- measured baseline, TechWatchProject/g
         raise ValueError("candidate rows do not share one snapshot cutoff and classifier version")
     cutoff_text, classifier = next(iter(metadata))
     snapshot_cutoff = _parse_utc(cutoff_text)
-    if classifier != CLASSIFIER_VERSION:
+    if classifier not in (CLASSIFIER_VERSION, LEGACY_CLASSIFIER_VERSION):
         raise ValueError(f"unexpected classifier version: {classifier!r}")
     if not parsed_weeks[0] <= snapshot_cutoff <= parsed_weeks[-1] + timedelta(days=7):
         raise ValueError("snapshot cutoff is outside the candidate week range")
@@ -519,6 +561,8 @@ def validate_publishable(  # noqa: C901 -- measured baseline, TechWatchProject/g
         "ocr_completed",
         "canonical_govote_positive",
         "exact_go_vote_phrase_positive",
+        "html_analyzed",
+        "html_govote_positive",
     )
     for engine in OUTPUT_FILES:
         candidate_by_week = {str(row["week_start_utc"]): row for row in candidate[engine]}
