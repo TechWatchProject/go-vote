@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Weekly GO Vote frequency in homepage OCR, split by recorded search engine.">
+    <meta name="description" content="Weekly voting-reminder text in homepage HTML and OCR, split by recorded search engine.">
     <title>GO Vote weekly data</title>
     <script
       src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"
@@ -70,7 +70,7 @@
       <header>
         <div class="eyebrow">Tech Watch Project</div>
         <h1>GO Vote, week by week</h1>
-        <p class="lede">Homepage OCR frequency from April 1, 2026 through the latest nightly snapshot, shown by recorded engine.</p>
+        <p class="lede">Homepage HTML reminder-text candidates and screenshot OCR from April 1, 2026 through the latest snapshot, shown by recorded engine.</p>
       </header>
 
       <section class="panel" aria-labelledby="chart-title">
@@ -82,7 +82,9 @@
           <label>
             Metric
             <select id="metric">
-              <option value="canonical_govote_positive">Canonical classifier — positive captures</option>
+              <option value="html_govote_positive">HTML election keywords — legacy detector</option>
+              <option value="html_govote_per_100_homepages">HTML election keywords — per 100 homepages</option>
+              <option value="canonical_govote_positive">Screenshot OCR election keywords — positive captures</option>
               <option value="exact_go_vote_phrase_positive">Exact “go vote” phrase — positive captures</option>
               <option value="canonical_govote_per_100_homepages">Canonical classifier — per 100 homepages</option>
               <option value="exact_go_vote_phrase_per_100_homepages">Exact “go vote” phrase — per 100 homepages</option>
@@ -103,7 +105,7 @@
       <section class="notes" aria-label="Method notes">
         <div>
           <h2>What is measured</h2>
-          <p>The canonical series uses the existing vote/election/poll classifier. The exact series requires the words “go vote” in sequence, case-insensitively, with flexible whitespace.</p>
+          <p>The restored HTML detector matches vote, election, or poll anywhere in captured HTML, including scripts, metadata, and autocomplete. It is the legacy HTML keyword series, not proof of a visible reminder banner. Screenshot OCR is independent; its exact series requires “go vote” in screenshot OCR text.</p>
         </div>
         <div>
           <h2>How to read coverage</h2>
@@ -153,7 +155,7 @@
         const labels = series["All engines"].map(row => row.week_start_utc.slice(0, 10));
         const datasets = Object.entries(series).map(([name, rows]) => ({
           label: name,
-          data: rows.map(row => Number(row[metric])),
+          data: rows.map(row => metric.startsWith("html_") && !Number(row.html_analyzed) ? null : Number(row[metric])),
           borderColor: colors[name],
           backgroundColor: colors[name],
           borderWidth: name === "All engines" ? 3 : 2,
@@ -184,7 +186,7 @@
       })).then(entries => {
         series = Object.fromEntries(entries);
         const latest = series["All engines"].at(-1);
-        status.textContent = `Snapshot cutoff: ${latest.snapshot_cutoff_utc} · partial weeks are marked in each CSV`;
+        status.textContent = `Snapshot cutoff: ${latest.snapshot_cutoff_utc} · Current week HTML classified: ${latest.html_analyzed ?? "pending"}/${latest.homepage_captures} · OCR completed: ${latest.ocr_completed}/${latest.homepage_captures} · HTML gaps mean unprocessed, not zero reminders`;
         draw();
         metricSelect.addEventListener("change", draw);
       }).catch(error => {

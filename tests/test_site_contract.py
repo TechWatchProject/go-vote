@@ -54,3 +54,10 @@ def test_downloadable_csvs_preserve_validated_frozen_baseline() -> None:
     validate_publishable(published, frozen)
     for filename in OUTPUT_FILES.values():
         assert (ROOT / "docs" / "data" / filename).is_file()
+
+
+def test_html_series_distinguishes_missing_coverage_and_ocr():
+    html = (ROOT / "docs" / "index.html").read_text()
+    assert 'value="html_govote_positive"' in html
+    assert "not proof of a visible reminder banner" in html
+    assert "!Number(row.html_analyzed) ? null" in html
