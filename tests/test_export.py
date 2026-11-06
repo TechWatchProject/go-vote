@@ -143,13 +143,13 @@ def test_unknown_engine_and_duplicate_search_fail_closed() -> None:
 
 def test_readonly_engine_rejects_any_other_database_user() -> None:
     with pytest.raises(ValueError, match="sentiment_readonly"):
-        create_readonly_engine("mysql+pymysql://writer:secret@db.kumquat-tlkxwawsjpr9iyde6takjb.cloud:25060/kumquat")
+        create_readonly_engine("mysql+pymysql://writer:secret@kumquat-mysql84-do-user-16990944-0.f.db.ondigitalocean.com:25060/kumquat")
     with pytest.raises(ValueError, match="host, port, and name"):
         create_readonly_engine("mysql+pymysql://sentiment_readonly:secret@example.invalid/kumquat")
     with pytest.raises(ValueError, match="query options"):
         create_readonly_engine(
             "mysql+pymysql://sentiment_readonly:secret@"
-            "db.kumquat-tlkxwawsjpr9iyde6takjb.cloud:25060/kumquat?init_command=DELETE"
+            "kumquat-mysql84-do-user-16990944-0.f.db.ondigitalocean.com:25060/kumquat?init_command=DELETE"
         )
 
 
