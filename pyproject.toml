@@ -24,6 +24,7 @@ dev = [
 [project.scripts]
 go-vote-export = "go_vote.export:main"
 go-vote-validate = "go_vote.export:validation_main"
+go-vote-publish = "go_vote.publish:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/go_vote"]

@@ -1,6 +1,6 @@
 # GO Vote weekly data
 
-This repository publishes Tech Watch Project's weekly GO Vote aggregate data and a Chart.js visualization. The public output starts at April 1, 2026, separates Google, Bing, and Yahoo according to the engine recorded with each capture, and includes a reconciled all-engine series.
+This repository exports Tech Watch Project's weekly GO Vote aggregate data. The report is private: it is served at https://kumquat.link/dashboards/go-vote/ behind GitHub sign-in on nexus, and its Chart.js page ships in the QA repo (`qa/dashboard_static/go-vote/`). Nothing is published to GitHub Pages, and no report data is committed here, because this repository is public. The public output starts at April 1, 2026, separates Google, Bing, and Yahoo according to the engine recorded with each capture, and includes a reconciled all-engine series.
 
 The exporter is deliberately read-only and privacy-limited:
 
@@ -32,7 +32,7 @@ The output directory must not already exist. The default interval is April 1, 20
 
 ## Publishing
 
-The nightly workflow reads `KUMQUAT_READONLY_DSN` from a GitHub Actions secret in an export-only job. A separate publishing job has repository write permission but never receives the database secret. Before publication, the candidate must reconcile and must not drop a week or reduce any capture, OCR, or positive count from the checked-in baseline. GitHub Pages serves `docs/` from `main`.
+The nightly workflow reads `KUMQUAT_READONLY_DSN` from a GitHub Actions secret in an export-only job. A separate read-only publishing job never receives the database secret. It posts the CSVs to nexus with `GO_VOTE_INGEST_TOKEN` (`go-vote-publish`), a token that can only replace this dashboard's data. Before publication, the candidate must reconcile and must not drop a week or reduce any count from the frozen baseline in `reports/`.
 
 ## Restored HTML voting series
 

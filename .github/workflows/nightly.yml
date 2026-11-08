@@ -28,7 +28,7 @@ jobs:
       - name: Export aggregate data with the read-only account
         env:
           KUMQUAT_READONLY_DSN: ${{ secrets.KUMQUAT_READONLY_DSN }}
-        run: uv run go-vote-export --output-dir generated-data --baseline-dir docs/data
+        run: uv run go-vote-export --output-dir generated-data --baseline-dir reports/2026-04-01_to_2026-08-06T051200Z
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: weekly-aggregate-csvs
@@ -36,18 +36,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Publishes to nexus (https://kumquat.link/dashboards/go-vote/), readable
+  # only behind GitHub sign-in. Never committed or served by GitHub Pages: this repo is
+  # public, so anything committed here is public. This job never receives
+  # the database secret, and the ingest token can only replace the data.
   publish:
     needs: export
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: main
-          fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           enable-cache: true
@@ -56,20 +57,9 @@ jobs:
         with:
           name: weekly-aggregate-csvs
           path: generated-data
-      - name: Revalidate against the latest published baseline
-        run: |
-          git pull --ff-only origin main
-          uv run go-vote-validate --candidate-dir generated-data --baseline-dir docs/data
-      - name: Publish changed CSVs
-        run: |
-          rm -rf docs/data
-          mv generated-data docs/data
-          git add docs/data
-          if git diff --cached --quiet; then
-            echo "No aggregate data changes"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "data: refresh weekly GO Vote aggregates"
-          git push
+      - name: Revalidate against the frozen baseline
+        run: uv run go-vote-validate --candidate-dir generated-data --baseline-dir reports/2026-04-01_to_2026-08-06T051200Z
+      - name: Publish to the private nexus dashboard
+        env:
+          GO_VOTE_INGEST_TOKEN: ${{ secrets.GO_VOTE_INGEST_TOKEN }}
+        run: uv run go-vote-publish --data-dir generated-data
