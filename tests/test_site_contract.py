@@ -1,40 +1,32 @@
 from pathlib import Path
 
-from go_vote.export import OUTPUT_FILES, read_csv_files, validate_publishable
+from go_vote.export import read_csv_files, validate_publishable
 
 ROOT = Path(__file__).resolve().parents[1]
 FROZEN_REPORT = ROOT / "reports" / "2026-04-01_to_2026-08-06T051200Z"
 
 
-def test_chart_page_links_all_downloads_and_both_metrics() -> None:
-    html = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
-    for filename in (
-        "go-vote-google-weekly.csv",
-        "go-vote-bing-weekly.csv",
-        "go-vote-yahoo-weekly.csv",
-        "go-vote-all-engines-weekly.csv",
-    ):
-        assert f"data/{filename}" in html
-    assert "canonical_govote_per_100_homepages" in html
-    assert "exact_go_vote_phrase_per_100_homepages" in html
-    assert "new Chart" in html
-    assert "recorded engine" in html.lower()
-    assert 'integrity="sha384-' in html
-    assert 'crossorigin="anonymous"' in html
+def test_nothing_is_published_to_github_pages() -> None:
+    """This repo is public. The report lives behind GitHub sign-in on nexus."""
+    assert not (ROOT / "docs").exists()
 
 
-def test_nightly_workflow_is_read_only_and_publishes_docs() -> None:
+def test_nightly_workflow_is_read_only_and_publishes_to_nexus() -> None:
     workflow = (ROOT / ".github" / "workflows" / "nightly.yml").read_text(encoding="utf-8")
     assert "schedule:" in workflow
     assert "KUMQUAT_READONLY_DSN" in workflow
     assert "go-vote-export" in workflow
-    assert "docs/data" in workflow
-    assert "contents: write" in workflow
+    assert "go-vote-publish" in workflow
     assert "workflow_dispatch:" in workflow
     assert "jobs:\n  export:" in workflow
     assert "\n  publish:" in workflow
     assert "needs: export" in workflow
     assert "@v" not in workflow
+    for banned in ("contents: write", "git push", "docs/", "pages"):
+        assert banned not in workflow
+    export_job, publish_job = workflow.split("\n  publish:")
+    assert "GO_VOTE_INGEST_TOKEN" not in export_job
+    assert "KUMQUAT_READONLY_DSN" not in publish_job
 
 
 def test_frozen_report_retains_validated_baseline_counts() -> None:
@@ -46,18 +38,3 @@ def test_frozen_report_retains_validated_baseline_counts() -> None:
     assert sum(int(str(row["ocr_completed"])) for row in combined) == 11_337
     assert sum(int(str(row["canonical_govote_positive"])) for row in combined) == 242
     assert sum(int(str(row["exact_go_vote_phrase_positive"])) for row in combined) == 0
-
-
-def test_downloadable_csvs_preserve_validated_frozen_baseline() -> None:
-    frozen = read_csv_files(FROZEN_REPORT)
-    published = read_csv_files(ROOT / "docs" / "data")
-    validate_publishable(published, frozen)
-    for filename in OUTPUT_FILES.values():
-        assert (ROOT / "docs" / "data" / filename).is_file()
-
-
-def test_html_series_distinguishes_missing_coverage_and_ocr():
-    html = (ROOT / "docs" / "index.html").read_text()
-    assert 'value="html_govote_positive"' in html
-    assert "not proof of a visible reminder banner" in html
-    assert "!Number(row.html_analyzed) ? null" in html
